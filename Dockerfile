@@ -1,9 +1,10 @@
-FROM quay.io/prometheuscommunity/postgres-exporter:v0.10.0
+FROM ubuntu:22.04
 
-USER root
-RUN apt-get update && \
-    apt-get install --assume-yes --no-install-recommends \
-        git \
-        && \
-    apt-get clean && \
-        rm -rf /var/lib/apt/lists/*
+RUN apt-get update \
+    && apt-get install -y wget \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY bin/postgres_exporter /bin/postgres_exporter
+
+EXPOSE 9187
+USER nobody
