@@ -1,0 +1,279 @@
+## exporter custom queries
+pg_connection_total:
+  query: "SELECT COUNT(*) AS total FROM pg_stat_activity;"
+  master: true
+  metrics:
+    - total:
+        usage: "GAUGE"
+        description: "count result for the state"
+pg_database:
+  query: "SELECT pg_database.datname, pg_database_size(pg_database.datname) AS size_bytes FROM pg_database;"
+  master: true
+  cache_seconds: 30
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "name of the database"
+    - size_bytes:
+        usage: "GAUGE"
+        description: "disk space used by the database"
+pg_dump:
+  query: "SELECT datname, usename, pid FROM pg_stat_activity WHERE application_name = 'pg_dump';"
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "database name"
+    - usename:
+        usage: "LABEL"
+        description: "username"
+    - pid:
+        usage: "COUNTER"
+        description: "activity pid"
+pg_idle_in_transaction_debug:
+  query: "SELECT pid, datname, usename, client_addr, query, floor(extract(epoch FROM (now() - query_start))) AS duration FROM pg_stat_activity WHERE state = 'idle in transaction' AND (now() - query_start) > '10 minutes'::interval;"
+  master: true
+  metrics:
+    - pid:
+        usage: "LABEL"
+        description: "pid"
+    - datname:
+        usage: "LABEL"
+        description: "database name"
+    - usename:
+        usage: "LABEL"
+        description: "username"
+    - client_addr:
+        usage: "LABEL"
+        description: "client address"
+    - query:
+        usage: "LABEL"
+        description: "query"
+    - duration:
+        usage: "COUNTER"
+        description: "duration"
+pg_idle_in_transaction_terminated:
+  query: "SELECT pid, datname, usename, client_addr, query, floor(extract(epoch FROM (now() - query_start))) AS duration, pg_terminate_backend(pid) FROM pg_stat_activity WHERE (usename not like 'pgrep_user%' AND usename not like 'log_rep%' AND usename <> '' AND state = 'idle in transaction') AND ((usename like 'v-oidc-%' AND query_start < NOW() - INTERVAL '30 minutes') OR (usename not like 'v-oidc-%' AND query_start < NOW() - INTERVAL '10 minutes'));"
+  master: true
+  metrics:
+    - pid:
+        usage: "LABEL"
+        description: "pid"
+    - datname:
+        usage: "LABEL"
+        description: "database name"
+    - usename:
+        usage: "LABEL"
+        description: "username"
+    - client_addr:
+        usage: "LABEL"
+        description: "client address"
+    - query:
+        usage: "LABEL"
+        description: "query"
+    - duration:
+        usage: "COUNTER"
+        description: "duration"
+pg_locks_debug:
+  query: "SELECT blocked_locks.pid AS blocked_pid, blocked_activity.usename AS blocked_user, blocking_locks.pid AS blocking_pid, blocking_activity.usename AS blocking_user, blocked_activity.query AS blocked_query, blocking_activity.query AS blocking_query FROM pg_catalog.pg_locks blocked_locks JOIN pg_catalog.pg_stat_activity blocked_activity ON blocked_activity.pid = blocked_locks.pid JOIN pg_catalog.pg_locks blocking_locks ON blocking_locks.locktype = blocked_locks.locktype AND blocking_locks.database IS NOT DISTINCT FROM blocked_locks.database AND blocking_locks.relation IS NOT DISTINCT FROM blocked_locks.relation AND blocking_locks.page IS NOT DISTINCT FROM blocked_locks.page AND blocking_locks.tuple IS NOT DISTINCT FROM blocked_locks.tuple AND blocking_locks.virtualxid IS NOT DISTINCT FROM blocked_locks.virtualxid AND blocking_locks.transactionid IS NOT DISTINCT FROM blocked_locks.transactionid AND blocking_locks.classid IS NOT DISTINCT FROM blocked_locks.classid AND blocking_locks.objid IS NOT DISTINCT FROM blocked_locks.objid AND blocking_locks.objsubid IS NOT DISTINCT FROM blocked_locks.objsubid AND blocking_locks.pid != blocked_locks.pid JOIN pg_catalog.pg_stat_activity blocking_activity ON blocking_activity.pid = blocking_locks.pid WHERE NOT blocked_locks.granted;"
+  master: true
+  metrics:
+    - blocked_pid:
+        usage: "COUNTER"
+        description: "blocked pid"
+    - blocked_user:
+        usage: "LABEL"
+        description: "blocked user"
+    - blocking_pid:
+        usage: "LABEL"
+        description: "blocking pid"
+    - blocking_user:
+        usage: "LABEL"
+        description: "blocking user"
+    - blocked_query:
+        usage: "LABEL"
+        description: "blocked query"
+    - blocking_query:
+        usage: "LABEL"
+        description: "blocking_query"
+pg_postmaster:
+  query: "SELECT pg_postmaster_start_time AS start_time_seconds FROM pg_postmaster_start_time();"
+  master: true
+  metrics:
+    - start_time_seconds:
+        usage: "GAUGE"
+        description: "time at which postmaster started"
+pg_replication:
+  query: "SELECT CASE WHEN pg_last_wal_receive_lsn() = pg_last_wal_replay_lsn() THEN 0 ELSE EXTRACT (EPOCH FROM now() - pg_last_xact_replay_timestamp()) END AS lag;"
+  master: true
+  metrics:
+    - lag:
+        usage: "GAUGE"
+        description: "replication lag behind master in seconds"
+pg_replication_logical:
+  query: "WITH ip_addr AS (SELECT application_name, client_addr AS ip_subscription FROM pg_stat_replication) SELECT slot_name, ip_subscription, CASE WHEN active='t' THEN 1 ELSE 0 END AS active_status FROM pg_replication_slots repslot LEFT JOIN ip_addr ON repslot.slot_name=ip_addr.application_name WHERE repslot.slot_type='logical';"
+  master: true
+  metrics:
+    - slot_name:
+        usage: "LABEL"
+        description: "name of the subscription"
+    - ip_subscription:
+        usage: "LABEL"
+        description: "ip address of subscription"
+    - active_status:
+        usage: "GAUGE"
+        description: "status logical replication"
+pg_replication_physical:
+  query: "WITH ip_addr AS (SELECT application_name, client_addr AS ip_subscription FROM pg_stat_replication) SELECT slot_name, ip_subscription, CASE WHEN active='t' THEN 1 ELSE 0 END AS active_status FROM pg_replication_slots repslot LEFT JOIN ip_addr ON repslot.slot_name=ip_addr.application_name WHERE repslot.slot_type='physical';"
+  master: true
+  metrics:
+    - slot_name:
+        usage: "LABEL"
+        description: "name of the subscription"
+    - ip_subscription:
+        usage: "LABEL"
+        description: "ip address of subscription"
+    - active_status:
+        usage: "GAUGE"
+        description: "status physical replication"
+pg_slow_debug:
+  query: "SELECT pid, datname, usename, client_addr, query, floor(extract(epoch FROM (now() - query_start))) AS duration FROM pg_stat_activity WHERE usename != 'log_rep' AND state = 'active' AND (now() - query_start) > '10 minutes'::interval;"
+  master: true
+  metrics:
+    - pid:
+        usage: "LABEL"
+        description: "pid"
+    - datname:
+        usage: "LABEL"
+        description: "database name"
+    - usename:
+        usage: "LABEL"
+        description: "username"
+    - client_addr:
+        usage: "LABEL"
+        description: "client address"
+    - query:
+        usage: "LABEL"
+        description: "query"
+    - duration:
+        usage: "COUNTER"
+        description: "duration"
+pg_stat_statements_red:
+  query: "SELECT t2.datname, sum(calls) as calls, sum(round(total_exec_time::numeric, 2)) AS time FROM pg_stat_statements t1 JOIN pg_database t2 ON (t1.dbid=t2.oid) GROUP BY t2.datname;"
+  master: true
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "database name"
+    - calls:
+        usage: "COUNTER"
+        description: "total of calls"
+    - time:
+        usage: "COUNTER"
+        description: "total of time"
+pg_stat_statements:
+  query: "SELECT t2.rolname, t3.datname, queryid, query, round(total_time::numeric, 2) AS total_time, calls, round(total_time::numeric / calls, 2) AS avg_time, round(max_time::numeric, 2) AS max_time, round((100 * total_time / sum(total_time::numeric) OVER ())::numeric, 2) AS percentage_cpu FROM pg_stat_statements t1 JOIN pg_roles t2 ON (t1.userid=t2.oid) JOIN pg_database t3 ON (t1.dbid=t3.oid) WHERE lower(substring(query, 1, 10)) not like 'copy%' AND lower(substring(query, 1, 10)) not like 'create%' AND lower(substring(query, 1, 10)) not like 'fetch%' ORDER BY percentage_cpu DESC LIMIT 20;"
+  master: true
+  metrics:
+    - rolname:
+        usage: "LABEL"
+        description: "user name"
+    - datname:
+        usage: "LABEL"
+        description: "database name"
+    - query:
+        usage: "LABEL"
+        description: "query"
+    - queryid:
+        usage: "LABEL"
+        description: "query id"
+    - calls:
+        usage: "COUNTER"
+        description: "total calls"
+    - total_time:
+        usage: "COUNTER"
+        description: "total time spent in miliseconds"
+    - avg_time:
+        usage: "COUNTER"
+        description: "average time spent in miliseconds"
+    - max_time:
+        usage: "COUNTER"
+        description: "max time spent in miliseconds"
+    - percentage_cpu:
+        usage: "COUNTER"
+        description: "percentage cpu intensive"
+pg_stat_user_tables:
+  query: "SELECT current_database() datname, schemaname, relname, seq_scan, seq_tup_read, idx_scan, idx_tup_fetch, n_tup_ins, n_tup_upd, n_tup_del, n_tup_hot_upd, n_live_tup, n_dead_tup, n_mod_since_analyze, coalesce(last_vacuum, '1970-01-01z'), coalesce(last_vacuum, '1970-01-01z') AS last_vacuum, coalesce(last_autovacuum, '1970-01-01z') AS last_autovacuum, coalesce(last_analyze, '1970-01-01z') AS last_analyze, coalesce(last_autoanalyze, '1970-01-01z') AS last_autoanalyze, vacuum_count, autovacuum_count, analyze_count, autoanalyze_count FROM pg_stat_user_tables;"
+  metrics:
+    - datname:
+        usage: "LABEL"
+        description: "name of current database"
+    - schemaname:
+        usage: "LABEL"
+        description: "name of the schema that this table is in"
+    - relname:
+        usage: "LABEL"
+        description: "name of this table"
+    - seq_scan:
+        usage: "COUNTER"
+        description: "number of sequential scans initiated on this table"
+    - seq_tup_read:
+        usage: "COUNTER"
+        description: "number of live rows fetched by sequential scans"
+    - idx_scan:
+        usage: "COUNTER"
+        description: "number of index scans initiated on this table"
+    - idx_tup_fetch:
+        usage: "COUNTER"
+        description: "number of live rows fetched by index scans"
+    - n_tup_ins:
+        usage: "COUNTER"
+        description: "number of rows inserted"
+    - n_tup_upd:
+        usage: "COUNTER"
+        description: "number of rows updated"
+    - n_tup_del:
+        usage: "COUNTER"
+        description: "number of rows deleted"
+    - n_tup_hot_upd:
+        usage: "COUNTER"
+        description: "number of rows hot updated (i.e., with no separate index update required)"
+    - n_live_tup:
+        usage: "GAUGE"
+        description: "estimated number of live rows"
+    - n_dead_tup:
+        usage: "GAUGE"
+        description: "estimated number of dead rows"
+    - n_mod_since_analyze:
+        usage: "GAUGE"
+        description: "estimated number of rows changed since last analyze"
+    - last_vacuum:
+        usage: "GAUGE"
+        description: "last time at which this table was manually vacuumed (not counting vacuum full)"
+    - last_autovacuum:
+        usage: "GAUGE"
+        description: "last time at which this table was vacuumed by the autovacuum daemon"
+    - last_analyze:
+        usage: "GAUGE"
+        description: "last time at which this table was manually analyzed"
+    - last_autoanalyze:
+        usage: "GAUGE"
+        description: "last time at which this table was analyzed by the autovacuum daemon"
+    - vacuum_count:
+        usage: "COUNTER"
+        description: "number of times this table has been manually vacuumed (not counting vacuum full)"
+    - autovacuum_count:
+        usage: "COUNTER"
+        description: "number of times this table has been vacuumed by the autovacuum daemon"
+    - analyze_count:
+        usage: "COUNTER"
+        description: "number of times this table has been manually analyzed"
+    - autoanalyze_count:
+        usage: "COUNTER"
+        description: "number of times this table has been analyzed by the autovacuum daemon"
+pg_wal:
+  query: "SELECT sum(SIZE) as size FROM pg_ls_waldir();"
+  master: true
+  metrics:
+    - size:
+        usage: "COUNTER"
+        description: "pg wal size"
