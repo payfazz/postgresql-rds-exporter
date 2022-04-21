@@ -92,24 +92,28 @@ instances:
             type: count
       
       - metric_prefix: postgresql.pg_locks_debug
-        query: SELECT blocked_locks.pid AS blocked_pid, blocked_activity.usename AS blocked_user, blocked_activity.query AS blocked_query, blocked_activity.wait_event AS blocked_wait_event, blocking_locks.pid AS blocking_pid, blocking_activity.usename AS blocking_user, blocking_activity.query AS blocking_query, blocking_activity.wait_event AS blocking_wait_event FROM pg_catalog.pg_locks blocked_locks JOIN pg_catalog.pg_stat_activity blocked_activity ON blocked_activity.pid = blocked_locks.pid JOIN pg_catalog.pg_locks blocking_locks ON blocking_locks.locktype = blocked_locks.locktype AND blocking_locks.database IS NOT DISTINCT FROM blocked_locks.database AND blocking_locks.relation IS NOT DISTINCT FROM blocked_locks.relation AND blocking_locks.page IS NOT DISTINCT FROM blocked_locks.page AND blocking_locks.tuple IS NOT DISTINCT FROM blocked_locks.tuple AND blocking_locks.virtualxid IS NOT DISTINCT FROM blocked_locks.virtualxid AND blocking_locks.transactionid IS NOT DISTINCT FROM blocked_locks.transactionid AND blocking_locks.classid IS NOT DISTINCT FROM blocked_locks.classid AND blocking_locks.objid IS NOT DISTINCT FROM blocked_locks.objid AND blocking_locks.objsubid IS NOT DISTINCT FROM blocked_locks.objsubid AND blocking_locks.pid != blocked_locks.pid JOIN pg_catalog.pg_stat_activity blocking_activity ON blocking_activity.pid = blocking_locks.pid WHERE NOT blocked_locks.granted;
+        query: SELECT blocked_locks.pid AS blocked_pid, blocked_activity.usename AS blocked_user, blocked_activity.query AS blocked_query, blocked_activity.wait_event AS blocked_wait_event, floor(extract(epoch FROM (now() - blocked_activity.query_start))) AS blocked_duration, blocking_locks.pid AS blocking_pid, blocking_activity.usename AS blocking_user, blocking_activity.query AS blocking_query, blocking_activity.wait_event AS blocking_wait_event, floor(extract(epoch FROM (now() - blocking_activity.query_start))) AS blocking_duration FROM pg_catalog.pg_locks blocked_locks JOIN pg_catalog.pg_stat_activity blocked_activity ON blocked_activity.pid = blocked_locks.pid JOIN pg_catalog.pg_locks blocking_locks ON blocking_locks.locktype = blocked_locks.locktype AND blocking_locks.database IS NOT DISTINCT FROM blocked_locks.database AND blocking_locks.relation IS NOT DISTINCT FROM blocked_locks.relation AND blocking_locks.page IS NOT DISTINCT FROM blocked_locks.page AND blocking_locks.tuple IS NOT DISTINCT FROM blocked_locks.tuple AND blocking_locks.virtualxid IS NOT DISTINCT FROM blocked_locks.virtualxid AND blocking_locks.transactionid IS NOT DISTINCT FROM blocked_locks.transactionid AND blocking_locks.classid IS NOT DISTINCT FROM blocked_locks.classid AND blocking_locks.objid IS NOT DISTINCT FROM blocked_locks.objid AND blocking_locks.objsubid IS NOT DISTINCT FROM blocked_locks.objsubid AND blocking_locks.pid != blocked_locks.pid JOIN pg_catalog.pg_stat_activity blocking_activity ON blocking_activity.pid = blocking_locks.pid WHERE NOT blocked_locks.granted;
         columns:
           - name: blocked_pid
-            type: gauge
+            type: tag
           - name: blocked_user
             type: tag
           - name: blocked_query
             type: tag
           - name: blocked_wait_event
             type: tag
+          - name: blocked_duration
+            type: count
           - name: blocking_pid
-            type: gauge
+            type: tag
           - name: blocking_user
             type: tag
           - name: blocking_query
             type: tag
           - name: blocking_wait_event
             type: tag
+          - name: blocking_duration
+            type: count
 
       - metric_prefix: postgresql.pg_locks
         query: WITH q_locks AS (select * from pg_locks where pid != pg_backend_pid() and database = (select oid from pg_database where datname = current_database())) SELECT (select current_database()) as datname, lockmodes AS lock_mode, coalesce((select count(*) FROM q_locks WHERE mode = lockmodes), 0) AS lock_count FROM unnest('{AccessShareLock, ExclusiveLock, RowShareLock, RowExclusiveLock, ShareLock, ShareRowExclusiveLock, AccessExclusiveLock, ShareUpdateExclusiveLock}'::text[]) lockmodes
