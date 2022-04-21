@@ -1,11 +1,11 @@
 init_config:
 
 instances:
-  - host: $DATA_SOURCE_HOST
-    port: $DATA_SOURCE_PORT
-    username: $DATA_SOURCE_USER
-    password: $DATA_SOURCE_PASS
-    dbname: $DATA_SOURCE_NAME
+  - host: __DATA_SOURCE_HOST__
+    port: __DATA_SOURCE_PORT__
+    username: __DATA_SOURCE_USER__
+    password: __DATA_SOURCE_PASS__
+    dbname: __DATA_SOURCE_NAME__
 
     ignore_databases:
       - rdsadmin
