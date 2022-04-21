@@ -16,7 +16,7 @@ instances:
       - relation_regex: '.*'
         relkind:
         - r
-    max_relations: 300
+    max_relations: 500
     
     collect_count_metrics: true
     collect_activity_metrics: true
